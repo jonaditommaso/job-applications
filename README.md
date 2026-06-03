@@ -1,4 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Job Applications Tracker
+
+## ¿Por qué existe esto?
+
+Durante mi búsqueda de empleo usaba Google Docs para registrar cada postulación a mano: empresa, puesto, estado, fecha, notas… Era lento, difícil de filtrar y fácil de perder el hilo. Esta app nace de esa necesidad personal: quería algo que me permitiera gestionar mis postulaciones de forma más ágil y visual.
+
+Es la herramienta que uso actualmente en el día a día para llevar el control de mis procesos de selección, con todos los datos relevantes en un solo lugar y una base de datos local en PostgreSQL para que nada salga de mi máquina.
+
+---
+
+## ¿Qué hace la app?
+
+### Funcionalidades principales
+
+- **Registrar postulaciones** con un formulario completo que incluye empresa, puesto, canal de postulación, fecha, notas y modalidad de trabajo.
+- **Estados del proceso**: `Postulado`, `Entrevista`, `Prueba técnica`, `Oferta`, `Rechazado`, `Ghosteado`.
+- **Filtrar por estado** mediante tabs en la interfaz, y **buscar** por empresa o puesto en tiempo real.
+- **Editar cualquier postulación** existente desde la misma vista.
+- **Ver el detalle completo** de cada postulación en un diálogo lateral.
+
+### Datos que se registran por postulación
+
+| Campo                        | Descripción                                                 |
+| ---------------------------- | ----------------------------------------------------------- |
+| Empresa y puesto             | Datos básicos de la oferta                                  |
+| Estado                       | Fase actual del proceso                                     |
+| Fecha de postulación         | Cuándo se envió la aplicación                               |
+| Canal                        | Dónde se encontró la oferta (LinkedIn, web, referido, etc.) |
+| Modalidad                    | Remoto, híbrido, mundial o solo UE                          |
+| Ubicación                    | País y ciudad                                               |
+| CV en inglés                 | Si se envió CV en inglés                                    |
+| Inglés requerido             | Si el puesto exige inglés                                   |
+| Rango salarial de la empresa | Mínimo y máximo ofrecido                                    |
+| Expectativa salarial         | Lo que se pidió                                             |
+| Tecnologías requeridas       | Stack principal del puesto                                  |
+| Tecnologías valoradas        | Nice to have                                                |
+| Candidatos en proceso        | Cuántos hay compitiendo                                     |
+| Postulación vista            | Si la empresa ya vio el perfil                              |
+| Contactado                   | Si hubo contacto previo                                     |
+| Notas                        | Observaciones libres                                        |
+
+### Stack técnico
+
+- **Next.js 15** (App Router) con TypeScript
+- **PostgreSQL** local como base de datos (via `pg`)
+- **shadcn/ui** para los componentes de interfaz
+- **Tailwind CSS** para estilos
+- **API Routes** de Next.js para el backend (`/api/applications`)
+
+---
 
 ## Getting Started
 
