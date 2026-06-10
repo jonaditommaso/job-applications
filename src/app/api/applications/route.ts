@@ -2,6 +2,24 @@ import { NextResponse } from "next/server";
 import pool from "@/lib/db";
 import { Application } from "@/types/application";
 
+function normalizeApplicationDate(value: string | null | undefined) {
+    if (!value) return null;
+
+    const raw = value.trim();
+    if (!raw) return null;
+
+    if (/[Tt ]\d{2}:\d{2}/.test(raw)) {
+        const parsed = new Date(raw);
+        return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    }
+
+    const now = new Date();
+    const [year, month, day] = raw.split("-").map(Number);
+    const parsed = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
 // GET /api/applications – lista todas las postulaciones
 export async function GET() {
     try {
@@ -31,6 +49,8 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Empresa, puesto y estado son requeridos" }, { status: 400 });
         }
 
+        const applicationDate = normalizeApplicationDate(body.application_date);
+
         const { rows } = await pool.query<Application>(
             `INSERT INTO applications (
         company, role, status, application_date, notes,
@@ -54,7 +74,7 @@ export async function POST(request: Request) {
                 body.company.trim(),
                 body.role.trim(),
                 body.status,
-                body.application_date || null,
+                applicationDate,
                 body.notes || null,
                 body.application_viewed ?? false,
                 body.contacted ?? false,

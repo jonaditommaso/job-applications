@@ -33,6 +33,25 @@ interface NewApplicationModalProps {
   initialData?: Application;
 }
 
+function buildApplicationDateTime(value: string | null | undefined) {
+  const raw = value?.trim();
+
+  if (!raw) {
+    return new Date().toISOString();
+  }
+
+  if (/[Tt ]\d{2}:\d{2}/.test(raw)) {
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+  }
+
+  const now = new Date();
+  const [year, month, day] = raw.split("-").map(Number);
+  const parsed = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+
+  return parsed.toISOString();
+}
+
 function getDefaultForm(initial?: Application) {
   if (initial) {
     return {
@@ -134,7 +153,7 @@ export function NewApplicationModal({ open, onClose, onSubmit, onUpdate, initial
       company: form.company.trim(),
       role: form.role.trim(),
       status: form.status,
-      application_date: form.application_date || null,
+      application_date: buildApplicationDateTime(form.application_date),
       notes: form.notes || null,
       application_viewed: form.application_viewed,
       contacted: form.contacted,

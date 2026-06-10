@@ -29,6 +29,8 @@ import {
   Pencil,
   Loader2,
 } from "lucide-react";
+import NewFlagDialog from "@/components/new-flag-dialog";
+import { FlagEvent } from "@/types/flags";
 
 // ── Status colour map ──────────────────────────────────────────────
 const STATUS_STYLES: Record<ApplicationStatus, string> = {
@@ -45,6 +47,55 @@ const WORK_MODE_ICON: Record<string, React.ReactNode> = {
   hybrid: <LayoutGrid size={12} />,
   worldwide: <Globe size={12} />,
   eu_only: <Flag size={12} />,
+};
+
+const FLAG_TYPE_LABELS: Record<string, string> = {
+  application_strategy: "Estrategia de aplicación",
+  cv: "CV",
+  profile: "Perfil",
+  networking: "Networking",
+  interview: "Entrevista",
+};
+
+const FLAG_TYPE_STYLES: Record<string, string> = {
+  application_strategy: "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200",
+  cv: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200",
+  profile: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200",
+  networking: "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
+  interview: "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200",
+};
+
+const FLAG_SUBTYPE_LABELS: Record<string, Record<string, string>> = {
+  application_strategy: {
+    salary_change: "Expectativa salarial",
+    target_country: "País objetivo",
+    target_role: "Puesto objetivo",
+    other: "Otro",
+  },
+  cv: {
+    skills: "Habilidades",
+    experience: "Experiencia",
+    projects: "Proyectos",
+    interests: "Intereses",
+    languages: "Idiomas",
+    format: "Formato",
+    information: "Información",
+    title: "Título",
+  },
+  profile: {
+    linkedin_update: "Actualización de LinkedIn",
+    github_update: "Actualización de GitHub",
+    project_update: "Actualización de proyecto",
+    portal_update: "Actualización de portal",
+  },
+  networking: {
+    recruiter_contact: "Contacto con reclutador",
+    other: "Otro",
+  },
+  interview: {
+    interview_done: "Entrevista realizada",
+    interview_feedback: "Feedback de entrevista",
+  },
 };
 
 type Filter = ApplicationStatus | "all";
@@ -83,9 +134,44 @@ function CompanyAvatar({ name }: { name: string }) {
 //   return new Date(d + "T12:00:00").toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 // }
 
+function parseSafeDate(value: string | null | undefined) {
+  if (!value) return null;
+
+  const raw = value.trim();
+  if (!raw) return null;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split("-").map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0, 0);
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function toDayKey(value: string | null | undefined) {
+  const parsed = parseSafeDate(value);
+  if (!parsed) return "sin-fecha";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateShort(d: string | null) {
-  if (!d) return "Sin fecha";
-  return new Date(d + "T12:00:00").toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+  const parsed = parseSafeDate(d);
+  if (!parsed) return "Sin fecha";
+
+  return parsed.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function getEventTimestamp(entry: { kind: "application" | "flag"; app?: Application; flag?: FlagEvent; createdAt: string }) {
+  const raw = entry.kind === "application" ? entry.app?.application_date : entry.flag?.effective_date;
+  const parsed = parseSafeDate(raw);
+
+  return parsed ? parsed.getTime() : new Date(entry.createdAt).getTime();
 }
 
 function formatLocation(country: string | null, city: string | null) {
@@ -95,8 +181,10 @@ function formatLocation(country: string | null, city: string | null) {
 
 export default function JobApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
+  const [flags, setFlags] = useState<FlagEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [flagModalOpen, setFlagModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
   const [activeFilter, setActiveFilter] = useState<Filter>("all");
   const [companySearch, setCompanySearch] = useState("");
@@ -115,8 +203,22 @@ export default function JobApplicationsPage() {
     }
   }, []);
 
+  const fetchFlags = useCallback(async () => {
+    try {
+      const res = await fetch("/api/flags");
+      if (!res.ok) throw new Error("Error al cargar flags");
+      const data: FlagEvent[] = await res.json();
+      setFlags(data);
+    } catch (err) {
+      console.error(err);
+    }
+  }, []);
+
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchApplications(); }, [fetchApplications]);
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { fetchFlags(); }, [fetchFlags]);
 
   const counts: Record<Filter, number> = {
     all: applications.length,
@@ -141,6 +243,20 @@ export default function JobApplicationsPage() {
       });
       if (!res.ok) throw new Error("Error al crear");
       await fetchApplications();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleAddFlag(data: Omit<FlagEvent, "id" | "created_at">) {
+    try {
+      const res = await fetch("/api/flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Error al crear");
+      await fetchFlags();
     } catch (err) {
       console.error(err);
     }
@@ -193,10 +309,16 @@ export default function JobApplicationsPage() {
               <p className="mt-0.5 text-xs text-zinc-500">Seguimiento de búsqueda laboral</p>
             </div>
           </div>
-          <Button onClick={() => setModalOpen(true)} size="sm" className="gap-2">
-            <Plus size={15} />
-            Nueva postulación
-          </Button>
+          <div className="flex items-center gap-2">
+              <Button onClick={() => setFlagModalOpen(true)} size="sm" className="gap-2" variant="outline">
+              <Plus size={15} />
+              Agregar flag
+            </Button>
+            <Button onClick={() => setModalOpen(true)} size="sm" className="gap-2">
+              <Plus size={15} />
+              Nueva postulación
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -275,160 +397,210 @@ export default function JobApplicationsPage() {
 
             {/* Rows agrupadas por fecha */}
             {(() => {
-              const groups: Record<string, Application[]> = {};
-              for (const app of filtered) {
-                const key = app.application_date ?? "";
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(app);
-              }
-              const sortedDates = Object.keys(groups).sort((a, b) => {
-                if (!a) return 1;
-                if (!b) return -1;
+              const timelineEntries = [
+                ...filtered.map((app) => ({
+                  kind: "application" as const,
+                  date: app.application_date ?? "",
+                  createdAt: app.created_at,
+                  app,
+                })),
+                ...flags.map((flag) => ({
+                  kind: "flag" as const,
+                  date: flag.effective_date ?? "",
+                  createdAt: flag.created_at,
+                  flag,
+                })),
+              ];
+
+              const timelineByDate = timelineEntries.reduce<Record<string, typeof timelineEntries>>((acc, entry) => {
+                const key = toDayKey(entry.date);
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(entry);
+                return acc;
+              }, {});
+
+              const sortedDates = Object.keys(timelineByDate).sort((a, b) => {
+                if (a === "sin-fecha") return 1;
+                if (b === "sin-fecha") return -1;
                 return b.localeCompare(a);
               });
-              return sortedDates.map((date) => (
-                <div key={date}>
-                  {/* Separador de fecha */}
+
+              return sortedDates.map((date) => {
+                const items = [...(timelineByDate[date] ?? [])].sort((a, b) => {
+                  const timeDiff = getEventTimestamp(b) - getEventTimestamp(a);
+                  if (timeDiff !== 0) return timeDiff;
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                });
+
+                return (
+                <div key={date || "sin-fecha"}>
                   <div className="flex items-center gap-3 border-b border-zinc-100 bg-zinc-50 px-5 py-1.5 dark:border-zinc-800 dark:bg-zinc-800/40">
                     <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 capitalize">
-                      {date ? formatDateShort(date) : "Sin fecha"}
+                      {date !== "sin-fecha" ? formatDateShort(date) : "Sin fecha"}
                     </span>
                     <span className="text-[10px] text-zinc-300 dark:text-zinc-600">
-                      ({groups[date].length} {groups[date].length === 1 ? "postulación" : "postulaciones"})
+                      ({items.length} {items.length === 1 ? "item" : "items"})
                     </span>
                   </div>
-                  {/* Rows del grupo */}
+
                   <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {groups[date].map((app) => (
-                      <div
-                        key={app.id}
-                        onClick={() => setViewingApp(app)}
-                        className="cursor-pointer grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_0.8fr_1fr_auto] items-center gap-2 px-5 py-3.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
-                      >
-                        {/* Company + Role + Techs */}
-                        <div className="flex items-center gap-3 min-w-0">
-                          <CompanyAvatar name={app.company} />
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                              {app.company}
-                            </p>
-                            <p className="truncate text-xs text-zinc-500">{app.role}</p>
-                            {(app.technologies.length > 0 || (app.technologies_nice?.length ?? 0) > 0) && (
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {app.technologies.map((t) => (
-                                  <span key={`req-${t}`} className="inline-flex items-center rounded px-1.5 text-[10px] font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
-                                    {t}
-                                  </span>
-                                ))}
-                                {(app.technologies_nice ?? []).map((t) => (
-                                  <span key={`nice-${t}`} className="inline-flex items-center rounded px-1.5 text-[10px] font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500">
-                                    {t}
-                                  </span>
-                                ))}
+                    {items.map((entry) => {
+                      if (entry.kind === "flag") {
+                        const typeLabel = FLAG_TYPE_LABELS[entry.flag.type] ?? entry.flag.type;
+                        const subtypeLabel = entry.flag.type && entry.flag.subtype
+                          ? FLAG_SUBTYPE_LABELS[entry.flag.type]?.[entry.flag.subtype] ?? entry.flag.subtype
+                          : "Sin subtipo";
+                        const tone = FLAG_TYPE_STYLES[entry.flag.type] ?? "border-zinc-200 bg-zinc-100 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-800 dark:text-zinc-300";
+
+                        return (
+                          <div key={`flag-${entry.flag.id}-${date}`} className="px-4 py-3">
+                            <article className={`rounded-xl border px-4 py-3 ${tone}`}>
+                              <div className="mb-2 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide">
+                                  <Flag size={12} />
+                                  {typeLabel}
+                                  <span className="text-[10px] font-normal opacity-80">· {subtypeLabel}</span>
+                                </div>
+                                <span className="text-[10px] font-medium opacity-80">
+                                  {date ? formatDateShort(date) : "Sin fecha"}
+                                </span>
                               </div>
+
+                              <div className="space-y-1 text-xs">
+                                {entry.flag.description?.trim() && (
+                                  <p className="leading-relaxed opacity-90">{entry.flag.description}</p>
+                                )}
+                                {entry.flag.hypothesis?.trim() && (
+                                  <p className="text-[11px] opacity-80">Hipótesis: {entry.flag.hypothesis}</p>
+                                )}
+                              </div>
+                            </article>
+                          </div>
+                        );
+                      }
+
+                      const app = entry.app;
+
+                      return (
+                        <div
+                          key={`app-${app.id}-${date}`}
+                          onClick={() => setViewingApp(app)}
+                          className="cursor-pointer grid grid-cols-[2fr_1.5fr_1fr_1fr_1fr_0.8fr_1fr_auto] items-center gap-2 px-5 py-3.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <CompanyAvatar name={app.company} />
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{app.company}</p>
+                              <p className="truncate text-xs text-zinc-500">{app.role}</p>
+                              {(app.technologies.length > 0 || (app.technologies_nice?.length ?? 0) > 0) && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {app.technologies.map((t) => (
+                                    <span key={`req-${t}`} className="inline-flex items-center rounded px-1.5 text-[10px] font-medium bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">
+                                      {t}
+                                    </span>
+                                  ))}
+                                  {(app.technologies_nice ?? []).map((t) => (
+                                    <span key={`nice-${t}`} className="inline-flex items-center rounded px-1.5 text-[10px] font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500">
+                                      {t}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[app.status]}`}>
+                              {STATUS_LABELS[app.status]}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-xs text-zinc-600 dark:text-zinc-400">{app.channel || "—"}</span>
+                          </div>
+
+                          <div>
+                            {app.work_mode ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                {WORK_MODE_ICON[app.work_mode]}
+                                {WORK_MODE_LABELS[app.work_mode]}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-zinc-400">—</span>
                             )}
                           </div>
-                        </div>
 
-                        {/* Status */}
-                        <div>
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_STYLES[app.status]}`}>
-                            {STATUS_LABELS[app.status]}
-                          </span>
-                        </div>
+                          <div className="flex items-center gap-1 min-w-0">
+                            {formatLocation(app.country, app.city) ? (
+                              <>
+                                <MapPin size={11} className="shrink-0 text-zinc-400" />
+                                <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                                  {formatLocation(app.country, app.city)}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-zinc-400">—</span>
+                            )}
+                          </div>
 
-                        {/* Canal */}
-                        <div>
-                          <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                            {app.channel || "—"}
-                          </span>
-                        </div>
-
-                        {/* Work Mode */}
-                        <div>
-                          {app.work_mode ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                              {WORK_MODE_ICON[app.work_mode]}
-                              {WORK_MODE_LABELS[app.work_mode]}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-zinc-400">—</span>
-                          )}
-                        </div>
-
-                        {/* Lugar */}
-                        <div className="flex items-center gap-1 min-w-0">
-                          {formatLocation(app.country, app.city) ? (
-                            <>
-                              <MapPin size={11} className="shrink-0 text-zinc-400" />
-                              <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
-                                {formatLocation(app.country, app.city)}
+                          <div className="flex flex-col gap-0.5">
+                            {app.english_required && (
+                              <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                Requerido
                               </span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-zinc-400">—</span>
-                          )}
-                        </div>
+                            )}
+                            {app.cv_in_english && (
+                              <span className="inline-flex w-fit items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                CV EN
+                              </span>
+                            )}
+                            {!app.english_required && !app.cv_in_english && (
+                              <span className="text-xs text-zinc-400">—</span>
+                            )}
+                          </div>
 
-                        {/* Idioma */}
-                        <div className="flex flex-col gap-0.5">
-                          {app.english_required && (
-                            <span className="inline-flex w-fit items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                              Requerido
-                            </span>
-                          )}
-                          {app.cv_in_english && (
-                            <span className="inline-flex w-fit items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                              CV EN
-                            </span>
-                          )}
-                          {!app.english_required && !app.cv_in_english && (
-                            <span className="text-xs text-zinc-400">—</span>
-                          )}
-                        </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              title="Vista por empresa"
+                              onClick={(e) => { e.stopPropagation(); toggleFlag(app, "application_viewed"); }}
+                              className={`cursor-pointer transition-colors hover:opacity-80 ${app.application_viewed ? "text-blue-500" : "text-zinc-300 dark:text-zinc-600"}`}
+                            >
+                              <Eye size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              title="Me contactaron"
+                              onClick={(e) => { e.stopPropagation(); toggleFlag(app, "contacted"); }}
+                              className={`cursor-pointer transition-colors hover:opacity-80 ${app.contacted ? "text-emerald-500" : "text-zinc-300 dark:text-zinc-600"}`}
+                            >
+                              <PhoneCall size={15} />
+                            </button>
+                            {app.other_candidates != null && (
+                              <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+                                <Users size={12} />
+                                {app.other_candidates}
+                              </span>
+                            )}
+                          </div>
 
-                        {/* Flags */}
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            title="Vista por empresa"
-                            onClick={(e) => { e.stopPropagation(); toggleFlag(app, "application_viewed"); }}
-                            className={`cursor-pointer transition-colors hover:opacity-80 ${app.application_viewed ? "text-blue-500" : "text-zinc-300 dark:text-zinc-600"}`}
-                          >
-                            <Eye size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            title="Me contactaron"
-                            onClick={(e) => { e.stopPropagation(); toggleFlag(app, "contacted"); }}
-                            className={`cursor-pointer transition-colors hover:opacity-80 ${app.contacted ? "text-emerald-500" : "text-zinc-300 dark:text-zinc-600"}`}
-                          >
-                            <PhoneCall size={15} />
-                          </button>
-                          {app.other_candidates != null && (
-                            <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
-                              <Users size={12} />
-                              {app.other_candidates}
-                            </span>
-                          )}
+                          <div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                              onClick={(e) => { e.stopPropagation(); setEditingApp(app); setModalOpen(true); }}
+                            >
+                              <Pencil size={13} />
+                            </Button>
+                          </div>
                         </div>
-
-                        {/* Editar */}
-                        <div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
-                            onClick={(e) => { e.stopPropagation(); setEditingApp(app); setModalOpen(true); }}
-                          >
-                            <Pencil size={13} />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
-              ));
+                );
+              });
             })()}
           </div>
         )}
@@ -447,6 +619,12 @@ export default function JobApplicationsPage() {
         app={viewingApp}
         open={viewingApp !== null}
         onClose={() => setViewingApp(null)}
+      />
+
+      <NewFlagDialog
+        open={flagModalOpen}
+        onClose={() => setFlagModalOpen(false)}
+        onSubmit={handleAddFlag}
       />
     </div>
   );
