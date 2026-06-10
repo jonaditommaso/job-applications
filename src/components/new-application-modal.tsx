@@ -52,6 +52,30 @@ function buildApplicationDateTime(value: string | null | undefined) {
   return parsed.toISOString();
 }
 
+function normalizeSalaryInput(value: string | null | undefined) {
+  const raw = value?.replace(/\D/g, "");
+
+  if (!raw) {
+    return null;
+  }
+
+  const numeric = Number(raw);
+
+  if (raw.length <= 3) {
+    return numeric * 1000;
+  }
+
+  return numeric;
+}
+
+function formatSalaryInput(value: number | null | undefined) {
+  if (value == null) {
+    return "";
+  }
+
+  return value % 1000 === 0 ? String(value / 1000) : String(value);
+}
+
 function getDefaultForm(initial?: Application) {
   if (initial) {
     return {
@@ -67,9 +91,9 @@ function getDefaultForm(initial?: Application) {
       work_mode: (initial.work_mode ?? "remote") as WorkMode | "",
       cv_in_english: initial.cv_in_english ?? false,
       english_required: initial.english_required ?? false,
-      salary_min_company: initial.salary_min_company != null ? String(initial.salary_min_company) : "",
-      salary_max_company: initial.salary_max_company != null ? String(initial.salary_max_company) : "",
-      salary_expectation: initial.salary_expectation != null ? String(initial.salary_expectation) : "",
+      salary_min_company: initial.salary_min_company != null ? formatSalaryInput(initial.salary_min_company) : "",
+      salary_max_company: initial.salary_max_company != null ? formatSalaryInput(initial.salary_max_company) : "",
+      salary_expectation: initial.salary_expectation != null ? formatSalaryInput(initial.salary_expectation) : "",
       tech_input: "",
       technologies: [...initial.technologies],
       tech_nice_input: "",
@@ -162,9 +186,9 @@ export function NewApplicationModal({ open, onClose, onSubmit, onUpdate, initial
       work_mode: (form.work_mode as WorkMode) || null,
       cv_in_english: form.cv_in_english,
       english_required: form.english_required,
-      salary_min_company: form.salary_min_company ? parseInt(form.salary_min_company) : null,
-      salary_max_company: form.salary_max_company ? parseInt(form.salary_max_company) : null,
-      salary_expectation: form.salary_expectation ? parseInt(form.salary_expectation) : null,
+      salary_min_company: normalizeSalaryInput(form.salary_min_company),
+      salary_max_company: normalizeSalaryInput(form.salary_max_company),
+      salary_expectation: normalizeSalaryInput(form.salary_expectation),
       technologies: form.technologies,
       technologies_nice: form.technologies_nice,
       country: form.country.trim() || null,
@@ -296,36 +320,48 @@ export function NewApplicationModal({ open, onClose, onSubmit, onUpdate, initial
           <div className="grid grid-cols-4 gap-3">
             <div className="space-y-1">
               <Label htmlFor="salary_min" className="text-xs">Salario mín.</Label>
-              <Input
-                id="salary_min"
-                type="number"
-                placeholder="80000"
-                className="h-8 text-sm"
-                value={f.salary_min_company}
-                onChange={(e) => set({ salary_min_company: e.target.value })}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  id="salary_min"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ej. 10"
+                  className="h-8 w-20 text-sm"
+                  value={f.salary_min_company}
+                  onChange={(e) => set({ salary_min_company: e.target.value.replace(/\D/g, "") })}
+                />
+                <span className="text-xs text-muted-foreground">,000</span>
+              </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="salary_max" className="text-xs">Salario máx.</Label>
-              <Input
-                id="salary_max"
-                type="number"
-                placeholder="120000"
-                className="h-8 text-sm"
-                value={f.salary_max_company}
-                onChange={(e) => set({ salary_max_company: e.target.value })}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  id="salary_max"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ej. 10"
+                  className="h-8 w-20 text-sm"
+                  value={f.salary_max_company}
+                  onChange={(e) => set({ salary_max_company: e.target.value.replace(/\D/g, "") })}
+                />
+                <span className="text-xs text-muted-foreground">,000</span>
+              </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="salary_exp" className="text-xs">Mi expectativa</Label>
-              <Input
-                id="salary_exp"
-                type="number"
-                placeholder="100000"
-                className="h-8 text-sm"
-                value={f.salary_expectation}
-                onChange={(e) => set({ salary_expectation: e.target.value })}
-              />
+              <div className="flex items-center gap-1">
+                <Input
+                  id="salary_exp"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ej. 10"
+                  className="h-8 w-20 text-sm"
+                  value={f.salary_expectation}
+                  onChange={(e) => set({ salary_expectation: e.target.value.replace(/\D/g, "") })}
+                />
+                <span className="text-xs text-muted-foreground">,000</span>
+              </div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="other_candidates" className="text-xs">Otros candidatos</Label>
