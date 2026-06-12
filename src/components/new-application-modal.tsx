@@ -445,6 +445,7 @@ export function NewApplicationModal({ open, onClose, onSubmit, onUpdate, initial
                   { label: "LinkedIn", color: "#0A66C2" },
                   { label: "Indeed",   color: "#003A9B" },
                   { label: "InfoJobs", color: "#F07400" },
+                  { label: "Joppy", color: "#0A6666" },
                 ].map(({ label, color }) => (
                   <button
                     key={label}
