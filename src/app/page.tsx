@@ -234,6 +234,8 @@ export default function JobApplicationsPage() {
     .filter((a) => activeFilter === "all" || a.status === activeFilter)
     .filter((a) => !companySearch.trim() || a.company.toLowerCase().includes(companySearch.trim().toLowerCase()));
 
+  const hasCompanySearch = companySearch.trim().length > 0;
+
   async function handleAddApplication(data: Omit<Application, "id" | "created_at">) {
     try {
       const res = await fetch("/api/applications", {
@@ -404,12 +406,14 @@ export default function JobApplicationsPage() {
                   createdAt: app.created_at,
                   app,
                 })),
-                ...flags.map((flag) => ({
-                  kind: "flag" as const,
-                  date: flag.effective_date ?? "",
-                  createdAt: flag.created_at,
-                  flag,
-                })),
+                ...(!hasCompanySearch
+                  ? flags.map((flag) => ({
+                      kind: "flag" as const,
+                      date: flag.effective_date ?? "",
+                      createdAt: flag.created_at,
+                      flag,
+                    }))
+                  : []),
               ];
 
               const timelineByDate = timelineEntries.reduce<Record<string, typeof timelineEntries>>((acc, entry) => {
