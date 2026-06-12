@@ -431,6 +431,7 @@ export default function JobApplicationsPage() {
                   if (timeDiff !== 0) return timeDiff;
                   return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
                 });
+                const applicationCount = items.filter((entry) => entry.kind === "application").length;
 
                 return (
                 <div key={date || "sin-fecha"}>
@@ -439,7 +440,7 @@ export default function JobApplicationsPage() {
                       {date !== "sin-fecha" ? formatDateShort(date) : "Sin fecha"}
                     </span>
                     <span className="text-[10px] text-zinc-300 dark:text-zinc-600">
-                      ({items.length} {items.length === 1 ? "item" : "items"})
+                      ({applicationCount} {applicationCount === 1 ? "postulación" : "postulaciones"})
                     </span>
                   </div>
 
